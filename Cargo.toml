@@ -6,7 +6,7 @@ authors = ["Zachary Dziura <zcdziura@gmail.com>"]
 readme = "README.md"
 license = "Unlicense/MIT"
 repository = "https://gitlab.com/zcdziura/sterling"
-keywords = ["d&d", "coins", "converter", "currency", "5e"]
+keywords = ["dnd", "coins", "converter", "currency", "5e"]
 
 [dependencies]
 clap = "2.31.1"
