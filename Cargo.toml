@@ -1,0 +1,13 @@
+[package]
+name = "sterling"
+version = "0.1.0"
+description = "Converts a given D&D 5e currency value to the Silver Standard."
+authors = ["Zachary Dziura <zcdziura@gmail.com>"]
+
+[dependencies]
+clap = "2.31.1"
+lazy_static = "1.0.0"
+regex = "0.2"
+
+[profile.release]
+lto = true
