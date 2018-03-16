@@ -1,47 +1,84 @@
 #[macro_use]
 extern crate clap;
+#[allow(unused_imports)]
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_yaml;
 
-use std::fmt;
-use std::ops::Add;
+mod config;
+mod currency;
+
+use std::io::ErrorKind;
 use std::process;
 
+use config::ConfigError;
+use currency::Currency;
 use regex::Regex;
 
 fn main() {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"(\d+)([cegps])?").unwrap();
-    }
-
     let app = clap_app!(sterling =>
-        (version: "0.1.0")
+        (version: "0.2.0")
         (about: "Converts a given D&D 5e currency value to the Silver Standard.")
-        (@arg VALUE: ... "The value to be converted; should be suffixed with the coin's short-hand abbreviation, i.e. p, g, e, s, or c. Defaults coin type to 'g'.")
+        (@arg CONFIG: -c --config +takes_value "Specify location of config file; defaults to './sterling-conf.yml'.")
+        (@arg PRINT_FULL: -f --full "Print currencies with full name, rather than with alias.")
+        (@arg VALUE: ... "The value to be converted; should be suffixed with the coin's short-hand abbreviation, i.e. p, g, e, s, or c.")
     );
 
-    if let Some(values) = app.get_matches().values_of("VALUE") {
+    let matches = app.get_matches();
+    let config_result = config::load_config(match matches.value_of("CONFIG") {
+        Some(file) => file,
+        None => "./sterling-conf.yml",
+    });
+
+    let currencies = match parse_currency_config(config_result, matches.value_of("CONFIG")) {
+        Ok(currencies) => currencies,
+        Err(error) => {
+            eprintln!("{}", error);
+            process::exit(1);
+        }
+    };
+
+    if let Some(values) = matches.values_of("VALUE") {
         let coins: Vec<&str> = values.collect();
+        let total_copper_value = match calculate_total_copper_value(coins) {
+            Ok(total_copper_value) => total_copper_value,
+            Err(err) => {
+                eprintln!("{}", err);
+                process::exit(1);
+            }
+        };
 
-        let total_copper_value: usize = coins
-            .iter()
-            .map(|coin| {
-                if let Some(captures) = RE.captures(coin) {
-                    let amount: usize = captures.get(1).unwrap().as_str().parse().unwrap();
-                    let denomination = captures.get(2).map_or("g", |d| d.as_str());
-                    
-                    convert_to_copper(amount, denomination)
-                } else {
-                    panic!("Error: Invalid coin value \"{}\"", coin);
-                }
-            })
-            .fold(0 as usize, |total, value| total + value);
+        let converted_currencies = convert_currencies(total_copper_value, currencies);
+        let display_strings: Vec<String> =
+            create_display_strings(converted_currencies, matches.is_present("PRINT_FULL"));
 
-        println!("{}", exchange_copper(total_copper_value));
+        println!("{}", (&display_strings).join(", "));
     } else {
-        println!("Please enter at least one value; should be suffixed with the coin's short-hand abbreviation, i.e. p, g, e, s, or c. Defaults coin type to 'g'.");
+        eprintln!("Please enter at least one value; should be suffixed with the coin's short-hand abbreviation, i.e. p, g, e, s, or c.");
         process::exit(1);
+    }
+}
+
+fn parse_currency_config(
+    config_result: Result<Vec<Currency>, ConfigError>,
+    config_file_path: Option<&str>,
+) -> Result<Vec<Currency>, String> {
+    match config_result {
+        Ok(values) => Ok(values),
+        Err(error) => match error.kind {
+            ErrorKind::NotFound => {
+                if let Some(file_path) = config_file_path {
+                    Err(format!("Sterling Error: Can't find configuration file: \"{}\"", &file_path))
+                } else {
+                    Ok(config::default_config())
+                }
+            },
+            _ => Err(format!("Sterling Error: {}", error)),
+        },
     }
 }
 
@@ -56,65 +93,157 @@ fn convert_to_copper(amount: usize, coin_denomination: &str) -> usize {
     }
 }
 
-fn exchange_copper(copper: usize) -> CurrencyValue {
-    CurrencyValue {
-        platinum: copper / 1000000,
-        gold: (copper % 1000000) / 10000,
-        silver: ((copper % 1000000) % 10000) / 100,
-        copper: ((copper % 1000000) % 10000) % 100,
+fn calculate_total_copper_value(coins: Vec<&str>) -> Result<usize, &'static str> {
+    let regex: Regex = Regex::new(r"(\d+)([cegps])").unwrap();
+    for coin in coins.iter() {
+        if let None = regex.captures(coin) {
+            return Err(
+                "Sterling Error: Invalid coin value. Make sure all coins are denoted properly."
+            )
+        }
     }
+
+    let converted_values = coins.iter().map(|coin| {
+        let captures = regex.captures(coin).unwrap();
+        let amount: usize = captures[1].parse().unwrap();
+        let denomination = captures[2].to_owned();
+        convert_to_copper(amount, &denomination)
+    });
+    
+    Ok(converted_values.fold(0 as usize, |total, value| total + value))
 }
 
-#[derive(Debug)]
-struct CurrencyValue {
-    platinum: usize,
-    gold: usize,
-    silver: usize,
-    copper: usize,
+fn exchange(copper: usize, mut currencies: Vec<Currency>) -> Vec<Currency> {
+    let mut val = copper;
+    currencies
+        .iter_mut()
+        .map(|currency| {
+            let value = val / currency.rate;
+            val = val % currency.rate;
+
+            currency.with_value(value)
+        })
+        .collect()
 }
 
-impl fmt::Display for CurrencyValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let &CurrencyValue {
-            platinum,
-            gold,
-            silver,
-            copper,
-        } = self;
+fn convert_currencies(copper_value: usize, currencies: Vec<Currency>) -> Vec<Currency> {
+    exchange(copper_value, currencies)
+        .iter()
+        .filter(|c| (*c).value.unwrap_or(0) > 0)
+        .cloned()
+        .collect()
+}
 
-        let mut output = String::new();
+fn create_display_strings(converted_currencies: Vec<Currency>, is_print_full: bool) -> Vec<String> {
+    converted_currencies
+        .iter()
+        .map(|c| {
+            if is_print_full {
+                c.full_display()
+            } else {
+                c.alias_display()
+            }
+        })
+        .collect()
+}
 
-        if platinum > 0 {
-            output = output + &format!("{}p ", platinum);
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use currency::Currency;
 
-        if gold > 0 {
-            output = output + &format!("{}g ", gold);
-        }
-
-        if silver > 0 {
-            output = output + &format!("{}s ", silver);
-        }
-
-        if copper > 0 {
-            output = output + &format!("{}c", copper);
-        } else if output.is_empty() {
-            output.push_str("0cp");
-        }
-
-        write!(f, "{}", output)
+    lazy_static! {
+        static ref STANDARD_CURRENCIES: [Currency; 4] = [
+            Currency::new("platinum", 1000000, "p", None),
+            Currency::new("gold", 10000, "g", None),
+            Currency::new("silver", 100, "s", None),
+            Currency::new("copper", 1, "c", None),
+        ];
     }
-}
 
-impl Add for CurrencyValue {
-    type Output = CurrencyValue;
+    #[test]
+    fn test_convert_copper_to_copper() {
+        assert_eq!(1, convert_to_copper(1, "c"));
+    }
 
-    fn add(self, other: CurrencyValue) -> CurrencyValue {
-        CurrencyValue {
-            platinum: self.platinum + other.platinum,
-            gold: self.gold + other.gold,
-            silver: self.silver + other.silver,
-            copper: self.copper + other.copper,
-        }
+    #[test]
+    fn test_convert_silver_to_copper() {
+        assert_eq!(10, convert_to_copper(1, "s"));
+    }
+
+    #[test]
+    fn test_convert_electrum_to_copper() {
+        assert_eq!(50, convert_to_copper(1, "e"));
+    }
+
+    #[test]
+    fn test_convert_gold_to_copper() {
+        assert_eq!(100, convert_to_copper(1, "g"));
+    }
+
+    #[test]
+    fn test_convert_platinum_to_copper() {
+        assert_eq!(1000, convert_to_copper(1, "p"));
+    }
+
+    #[test]
+    fn test_calculate_total_copper_value() {
+        let values = vec!["1p", "1g", "1e", "1s", "1c"];
+        assert_eq!(1161, calculate_total_copper_value(values).unwrap());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_calculate_total_copper_value_bad_inputs() {
+        let values = vec!["1p", "1g", "1f", "1s", "1c"];
+        assert_eq!(1161, calculate_total_copper_value(values).unwrap());
+    }
+
+    #[test]
+    fn test_exchange_to_copper() {
+        let currencies = vec![
+            Currency::new("platinum", 1000000, "p", None).with_value(0),
+            Currency::new("gold", 10000, "g", None).with_value(0),
+            Currency::new("silver", 100, "s", None).with_value(0),
+            Currency::new("copper", 1, "c", None).with_value(1),
+        ];
+
+        assert_eq!(currencies, exchange(1, STANDARD_CURRENCIES.to_vec()));
+    }
+
+    #[test]
+    fn test_exchange_to_silver() {
+        let currencies = vec![
+            Currency::new("platinum", 1000000, "p", None).with_value(0),
+            Currency::new("gold", 10000, "g", None).with_value(0),
+            Currency::new("silver", 100, "s", None).with_value(1),
+            Currency::new("copper", 1, "c", None).with_value(0),
+        ];
+
+        assert_eq!(currencies, exchange(100, STANDARD_CURRENCIES.to_vec()));
+    }
+
+    #[test]
+    fn test_exchange_to_gold() {
+        let currencies = vec![
+            Currency::new("platinum", 1000000, "p", None).with_value(0),
+            Currency::new("gold", 10000, "g", None).with_value(1),
+            Currency::new("silver", 100, "s", None).with_value(0),
+            Currency::new("copper", 1, "c", None).with_value(0),
+        ];
+
+        assert_eq!(currencies, exchange(10000, STANDARD_CURRENCIES.to_vec()));
+    }
+
+    #[test]
+    fn test_exchange_to_platinum() {
+        let currencies = vec![
+            Currency::new("platinum", 1000000, "p", None).with_value(1),
+            Currency::new("gold", 10000, "g", None).with_value(0),
+            Currency::new("silver", 100, "s", None).with_value(0),
+            Currency::new("copper", 1, "c", None).with_value(0),
+        ];
+
+        assert_eq!(currencies, exchange(1000000, STANDARD_CURRENCIES.to_vec()));
     }
 }
