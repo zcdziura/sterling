@@ -21,3 +21,5 @@ Cargo.lock
 .history
 
 # End of https://www.gitignore.io/api/rust
+
+sterling-conf.yml

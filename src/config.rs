@@ -1,6 +1,6 @@
+use std::convert::From;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use std::convert::From;
 use std::fs::File;
 use std::io::{self, BufReader, ErrorKind};
 
@@ -18,10 +18,10 @@ pub fn load_config(filename: &str) -> Result<Vec<Currency>, ConfigError> {
 
 pub fn default_config() -> Vec<Currency> {
     vec![
-        Currency::new("platinum", 1000000, "p", None),
-        Currency::new("gold", 10000, "g", None),
-        Currency::new("silver", 100, "s", None),
-        Currency::new("copper", 1, "c", None),
+        Currency::new("platinum", 1000000, "p", None, None),
+        Currency::new("gold", 10000, "g", None, None),
+        Currency::new("silver", 100, "s", None, None),
+        Currency::new("copper", 1, "c", None, None),
     ]
 }
 

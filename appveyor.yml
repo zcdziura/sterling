@@ -1,0 +1,29 @@
+os: Visual Studio 2015
+branches:
+  only:
+    - master
+environment:
+  matrix:
+    - channel: stable
+      target: x86_64-pc-windows-gnu
+artifacts:
+  - path: target/release/sterling.exe
+    name: sterling
+install:
+  - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
+  - rustup-init -yv --default-toolchain %channel% --default-host %target%
+  - set PATH=%PATH%;%USERPROFILE%\.cargo\bin
+  - rustc -vV
+  - cargo -vV
+build: false
+test_script:
+  - cargo test --verbose
+  - cargo build --release
+deploy:
+  provider: GitHub
+  description: ''
+  auth_token:
+    secure: bvA/4J1T0h65ur6tsg6k/wlZFjP3qr2QsyRsmGMEmm7DOF61xmzTnjuBcPjQYrba
+  artifact: target/release/sterling.exe
+  on:
+    branch: master

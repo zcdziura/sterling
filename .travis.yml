@@ -1,0 +1,27 @@
+language: rust
+os:
+  - osx
+branches:
+  only:
+    - master
+rust:
+  - stable
+script:
+  - cargo test --verbose
+  - cargo build --release
+before_deploy:
+  - git config --local user.name "Zachary Dziura"
+  - git config --local user.email "zcdziura@gmail.com"
+  - git tag "$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)-osx"
+deploy:
+  provider: releases
+  api_key:
+    secure: "NVH5d3CH0QUyFSu0MbeB3WvSo52qwjxH98wIL7kieD/kbTrTzTCbTWiTCV+/OM41nWOdxTy9T5TLqDsrh4k4xCkb4VbKTcsfIpBaQqwMvT6Co/GgLr4xSiHBI/ENBVwbnyDavMxh/E5AAAPF/HgGci2tEqzNuu9V7jon6uhb8+WovbfZeEA4tSNLsWV5g3MwssMfdaWzDPTHsiWXFPn6AVhkmy4fKAIHoUtp37A7bqx1hGPpFD3OGYN1oDxtJK5jRBSXegyWh08RQkLQ74PJTWD6Xw+Hvp1ewP1vitP69VJgsBC496jPasqAEOVeD3KogtcmBEyaIG+I5LZWLTibs41qF83cxJDdWxw69H827IXSQobM+7Sc51chWJR0H3OA1yDPQvorI1C17zvXd4wPpDfSUeY5ZqAplnYMOxk3jDbbX099bEyRE/skWHRaqL99fV7i5bO3aHDFP/BDjp03hnzpvfKs9zm05e87LStriNYQ5NsCPkdX+W18Q15DLhS2D9cp37PPAUA5jLNUFiEY5x9fwl5XEpefBqrqmE8qbmkc9GTr3MZikmTfB51Nx5NvkybCTKhMoKw5AhNLmw0fnkaqxrei7Uif7WqxTkngJep6VLidmt2pRJ9Qj3AWOXsLZJPm0ZQuo71dWC049EeEVtfQkyz/9K2J+iNVRgdiEeg="
+  file_glob: true
+  file: target/release/sterling
+  skip_cleanup: true
+  on:
+    repo: zcdziura/sterling
+    branch: master
+addons:
+  artifacts: true

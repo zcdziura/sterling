@@ -7,16 +7,24 @@ pub struct Currency {
     pub value: Option<usize>,
     pub alias: String,
     pub plural: Option<String>,
+    pub optional: Option<bool>,
 }
 
 impl Currency {
-    pub fn new(name: &str, rate: usize, alias: &str, plural: Option<String>) -> Currency {
+    pub fn new(
+        name: &str,
+        rate: usize,
+        alias: &str,
+        plural: Option<String>,
+        optional: Option<bool>,
+    ) -> Currency {
         Currency {
             name: name.to_owned(),
             rate,
             value: None,
             alias: alias.to_owned(),
             plural,
+            optional,
         }
     }
 
@@ -27,6 +35,14 @@ impl Currency {
             value: Some(value),
             alias: self.alias.clone(),
             plural: self.plural.clone(),
+            optional: None,
+        }
+    }
+
+    pub fn is_optional(&self) -> bool {
+        match self.optional {
+            Some(optional) => optional,
+            None => false,
         }
     }
 
@@ -49,10 +65,6 @@ impl Currency {
         display
     }
 }
-
-// impl Display for Currency {
-//     fn
-// }
 
 impl Ord for Currency {
     fn cmp(&self, other: &Currency) -> Ordering {

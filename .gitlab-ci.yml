@@ -1,0 +1,24 @@
+image: "rust:latest"
+stages:
+  - test
+  - deploy
+
+cargo:test:
+  stage: test  
+  only:
+    - master
+  script:
+    - cargo test --verbose
+
+cargo:build:
+  stage: deploy
+  only:
+    - master
+  script:
+    - cargo build --release
+  cache:
+    paths:
+      - target/
+  artifacts:
+    paths:
+      - target/release/sterling
