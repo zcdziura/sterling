@@ -48,21 +48,21 @@ sterling --full 1p 36g 12e 82s 469c // 64 silver, 89 copper
 // Convert one platinum, thirty-six gold, twelve electrum, eighty-two silver, and four hundred
 // sixty-nine copper coins, printing the full names of the coins, using the custom config file
 // detailed below, including optional currencies
-sterling --full -o -c "~/Documents/D&D/sterling-conf.yml" 1p 36g 12e 82s 469c // 27 sterling, 9 farthing
+sterling --full -o -c "~/Documents/D&D/sterling-conf.yml" 1p 36g 12e 82s 469c // 7 guilders, 6 sterling, 25 pence
 ```
 
 ## Adding and Subtracting Currency Examples
 
 ```
 // Add together ten and twenty pense, using the custom config file detailed below
-sterling add "10p" "20p" // 1s, 10p
+sterling add "10p" "20p" // 30p
 
 // Subtract two sterling and ten pence from one florin
-sterling sub "1F" "2s 10p" --full // 33 sterling, 10 pence
+sterling sub "1F" "2s 10p" --full // 2 sterling, 10 pence
 
 // Subtract one florin from two sterling and ten pence. Note that, regardless of order, the smaller
 // value is ALWAYS subtracted from the larger value.
-sterling sub "2s 10p" "1F" --full // 33 sterling, 10 pence
+sterling sub "2s 10p" "1F" --full // 2 sterling, 10 pence
 ```
 
 Note that `sterling` doesn't allow for negative currencies. Therefore, when subtracting currencies,
@@ -80,23 +80,29 @@ within my own campaign!
 
 ```
 -
-  name: "florin"
-  rate: 8640
-  alias: "F"
+  name: "note"
+  rate: 143360
+  alias: "N"
   optional: true
 -
-  name: "sterling"
-  rate: 240
+  name: "eagle"
+  rate: 17920
+  alias: "e"
+-
+  name: "guilder"
+  rate: 896
+  alias: "g"
+  plural: "guilders"
+-
+  name: "shilling"
+  rate: 32
   alias: "s"
+  plural: "sterling"
 -
   name: "penny"
-  rate: 12
+  rate: 1
   alias: "p"
   plural: "pence"
--
-  name: "farthing"
-  rate: 1
-  alias: "f"
 ```
 
 Please note that the `rate` value is defined as the number of copper coins that goes into one of
