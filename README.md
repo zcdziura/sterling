@@ -92,7 +92,6 @@ within my own campaign!
   name: "guilder"
   rate: 896
   alias: "g"
-  plural: "guilders"
 -
   name: "shilling"
   rate: 32

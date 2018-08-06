@@ -10,16 +10,47 @@ use currency::Currency;
 
 pub fn load_config(filename: &str) -> Result<Vec<Currency>, ConfigError> {
     let config_file = File::open(filename)?;
-    let mut configs: Vec<Currency> = serde_yaml::from_reader(BufReader::new(config_file))?;
-    configs.sort_by(|a, b| b.cmp(a));
+    let config: Vec<Currency> = serde_yaml::from_reader(BufReader::new(config_file))?;
 
-    Ok(configs)
+    Ok(config)
 }
 
-pub fn default_config() -> Vec<Currency> {
+pub fn parse_currency_config(
+    config_result: Result<Vec<Currency>, ConfigError>,
+    config_file_path: Option<&str>,
+) -> Result<Vec<Currency>, String> {
+    match config_result {
+        Ok(values) => Ok(values),
+        Err(error) => match error.kind {
+            ErrorKind::NotFound => {
+                if let Some(file_path) = config_file_path {
+                    Err(format!(
+                        "Sterling Error: Can't find configuration file: \"{}\"",
+                        &file_path
+                    ))
+                } else {
+                    Ok(silver_standard_config())
+                }
+            }
+            _ => Err(format!("Sterling Error: {}", error)),
+        },
+    }
+}
+
+pub fn phb_config() -> Vec<Currency> {
     vec![
-        Currency::new("platinum", 1000000, "p", None, None),
-        Currency::new("gold", 10000, "g", None, None),
+        Currency::new("platinum", 1000, "p", None, None),
+        Currency::new("gold", 100, "g", None, None),
+        Currency::new("electrum", 50, "e", None, Some(true)),
+        Currency::new("silver", 10, "s", None, None),
+        Currency::new("copper", 1, "c", None, None),
+    ]
+}
+
+fn silver_standard_config() -> Vec<Currency> {
+    vec![
+        Currency::new("platinum", 1_000_000, "p", None, None),
+        Currency::new("gold", 10_000, "g", None, None),
         Currency::new("silver", 100, "s", None, None),
         Currency::new("copper", 1, "c", None, None),
     ]

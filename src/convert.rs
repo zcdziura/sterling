@@ -1,155 +1,109 @@
-use currency::Currency;
+use std::collections::HashMap;
+use std::str::FromStr;
+
 use regex::Regex;
+use separator::Separatable;
 
-pub fn convert_to_copper(amount: usize, coin_denomination: &str) -> usize {
-    match coin_denomination {
-        "p" => amount * 1000,
-        "g" => amount * 100,
-        "e" => amount * 50,
-        "s" => amount * 10,
-        "c" => amount,
-        _ => unreachable!("Invalid coin type; must be a valid coin found in the PHB."),
-    }
+use currency::Currency;
+use lazysort::Sorted;
+
+pub fn calculate_total_copper_value(
+    values: &str,
+    currency_regex: &Regex,
+    rates: HashMap<String, usize>,
+) -> usize {
+    currency_regex
+        .captures_iter(&values)
+        .fold(0, |sum, capture| {
+            let value: usize = str::replace(&capture[1], ",", "").parse().unwrap();
+            let rate: &usize = rates.get(&capture[2]).unwrap();
+            let product = value * rate;
+
+            sum + product
+        })
 }
 
-pub fn calculate_total_copper_value(coins: Vec<&str>) -> Result<usize, &'static str> {
-    let regex: Regex = Regex::new(r"(\d+)([cegps])").unwrap();
-    for coin in coins.iter() {
-        if let None = regex.captures(coin) {
-            return Err(
-                "Sterling Error: Invalid coin value. Make sure all coins are denoted properly.",
-            );
-        }
-    }
-
-    let converted_values = coins.iter().map(|coin| {
-        let captures = regex.captures(coin).unwrap();
-        let amount: usize = captures[1].parse().unwrap();
-        let denomination = captures[2].to_owned();
-        convert_to_copper(amount, &denomination)
-    });
-
-    Ok(converted_values.fold(0 as usize, |total, value| total + value))
-}
-
-pub fn convert_currencies(copper_value: usize, currencies: Vec<Currency>) -> Vec<Currency> {
-    exchange(copper_value, currencies)
-        .iter()
-        .filter(|c| (*c).value.unwrap_or(0) > 0)
-        .cloned()
-        .collect()
-}
-
-pub fn exchange(copper: usize, mut currencies: Vec<Currency>) -> Vec<Currency> {
-    let mut val = copper;
+pub fn exchange_currencies(
+    copper_value: usize,
+    currencies: &[Currency],
+    print_full_name: bool,
+) -> Vec<String> {
+    let mut val = copper_value;
     currencies
-        .iter_mut()
+        .iter()
+        .sorted()
+        .filter(|currency| currency.optional.unwrap_or(true))
         .map(|currency| {
             let value = val / currency.rate;
             val = val % currency.rate;
 
-            currency.with_value(value)
+            (
+                value,
+                if print_full_name {
+                    if value > 1 {
+                        match (&currency).plural {
+                            Some(ref plural) => String::from_str(plural).unwrap(),
+                            None => format!("{}s", &currency.name),
+                        }
+                    } else {
+                        String::from_str(&currency.name).unwrap()
+                    }
+                } else {
+                    String::from_str(&currency.alias).unwrap()
+                },
+            )
+        })
+        .filter(|tuple| tuple.0 > 0)
+        .map(|tuple| {
+            format!(
+                "{}{}{}",
+                tuple.0.separated_string(),
+                if tuple.1.len() > 1 { " " } else { "" },
+                tuple.1
+            )
         })
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use convert::*;
+    use std::collections::HashMap;
+
+    use super::{calculate_total_copper_value, exchange_currencies};
     use currency::Currency;
+    use regex::Regex;
 
     lazy_static! {
-        static ref STANDARD_CURRENCIES: [Currency; 4] = [
-            Currency::new("platinum", 1000000, "p", None, None),
-            Currency::new("gold", 10000, "g", None, None),
-            Currency::new("silver", 100, "s", None, None),
-            Currency::new("copper", 1, "c", None, None),
+        static ref STANDARD_CURRENCIES: Vec<Currency> = vec![
+            Currency::new("guilder", 10_000, "g", None, None),
+            Currency::new("shilling", 100, "s", Some("sterling".to_owned()), None),
+            Currency::new("penny", 1, "p", Some("pence".to_owned()), None),
         ];
-    }
-
-    #[test]
-    fn test_convert_copper_to_copper() {
-        assert_eq!(1, convert_to_copper(1, "c"));
-    }
-
-    #[test]
-    fn test_convert_silver_to_copper() {
-        assert_eq!(10, convert_to_copper(1, "s"));
-    }
-
-    #[test]
-    fn test_convert_electrum_to_copper() {
-        assert_eq!(50, convert_to_copper(1, "e"));
-    }
-
-    #[test]
-    fn test_convert_gold_to_copper() {
-        assert_eq!(100, convert_to_copper(1, "g"));
-    }
-
-    #[test]
-    fn test_convert_platinum_to_copper() {
-        assert_eq!(1000, convert_to_copper(1, "p"));
+        static ref CURRENCY_REGEX: Regex = Regex::new(r"(\d+)([Ngsp])").unwrap();
     }
 
     #[test]
     fn test_calculate_total_copper_value() {
-        let values = vec!["1p", "1g", "1e", "1s", "1c"];
-        assert_eq!(1161, calculate_total_copper_value(values).unwrap());
+        let rates: HashMap<String, usize> = vec![
+            ("g".to_owned(), 10_000usize),
+            ("s".to_owned(), 100usize),
+            ("p".to_owned(), 1usize),
+        ].into_iter()
+            .collect();
+
+        let result = 10101usize;
+        assert_eq!(
+            result,
+            calculate_total_copper_value("1g 1s 1p", &CURRENCY_REGEX, rates)
+        );
     }
 
     #[test]
-    #[should_panic]
-    fn test_calculate_total_copper_value_bad_inputs() {
-        let values = vec!["1p", "1g", "1f", "1s", "1c"];
-        assert_eq!(1161, calculate_total_copper_value(values).unwrap());
-    }
-
-    #[test]
-    fn test_exchange_to_copper() {
-        let currencies = vec![
-            Currency::new("platinum", 1000000, "p", None, None).with_value(0),
-            Currency::new("gold", 10000, "g", None, None).with_value(0),
-            Currency::new("silver", 100, "s", None, None).with_value(0),
-            Currency::new("copper", 1, "c", None, None).with_value(1),
-        ];
-
-        assert_eq!(currencies, exchange(1, STANDARD_CURRENCIES.to_vec()));
-    }
-
-    #[test]
-    fn test_exchange_to_silver() {
-        let currencies = vec![
-            Currency::new("platinum", 1000000, "p", None, None).with_value(0),
-            Currency::new("gold", 10000, "g", None, None).with_value(0),
-            Currency::new("silver", 100, "s", None, None).with_value(1),
-            Currency::new("copper", 1, "c", None, None).with_value(0),
-        ];
-
-        assert_eq!(currencies, exchange(100, STANDARD_CURRENCIES.to_vec()));
-    }
-
-    #[test]
-    fn test_exchange_to_gold() {
-        let currencies = vec![
-            Currency::new("platinum", 1000000, "p", None, None).with_value(0),
-            Currency::new("gold", 10000, "g", None, None).with_value(1),
-            Currency::new("silver", 100, "s", None, None).with_value(0),
-            Currency::new("copper", 1, "c", None, None).with_value(0),
-        ];
-
-        assert_eq!(currencies, exchange(10000, STANDARD_CURRENCIES.to_vec()));
-    }
-
-    #[test]
-    fn test_exchange_to_platinum() {
-        let currencies = vec![
-            Currency::new("platinum", 1000000, "p", None, None).with_value(1),
-            Currency::new("gold", 10000, "g", None, None).with_value(0),
-            Currency::new("silver", 100, "s", None, None).with_value(0),
-            Currency::new("copper", 1, "c", None, None).with_value(0),
-        ];
-
-        assert_eq!(currencies, exchange(1000000, STANDARD_CURRENCIES.to_vec()));
+    fn test_exchange_currencies() {
+        let result = vec!["1g".to_owned(), "1s".to_owned(), "1p".to_owned()];
+        assert_eq!(
+            result,
+            exchange_currencies(10101, &STANDARD_CURRENCIES, false)
+        );
     }
 }

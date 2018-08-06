@@ -1,6 +1,6 @@
 [package]
 name = "sterling"
-version = "0.3.0"
+version = "1.0.0"
 description = "Converts a given D&D 5e currency value to the Silver Standard."
 authors = ["Zachary Dziura <zcdziura@gmail.com>"]
 readme = "README.md"
@@ -8,14 +8,31 @@ license = "Unlicense/MIT"
 repository = "https://gitlab.com/zcdziura/sterling"
 keywords = ["dnd", "coins", "converter", "currency", "5e"]
 
+[lib]
+name = "sterling_ops"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sterling"
+path = "src/main.rs"
+
 [dependencies]
-clap = "2.31"
+clap = "2.32"
+lazysort = "0.2"
 lazy_static = "1.0"
 regex = "1.0"
+separator = "0.3"
 serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.7"
 
+[dev-dependencies]
+criterion = "0.2"
+
 [profile.release]
 lto = true
 panic = "abort"
+
+[[bench]]
+name = "bench"
+harness = false
