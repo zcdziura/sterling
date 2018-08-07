@@ -1,6 +1,6 @@
 [package]
 name = "sterling"
-version = "1.0.0"
+version = "1.0.1"
 description = "Converts a given D&D 5e currency value to the Silver Standard."
 authors = ["Zachary Dziura <zcdziura@gmail.com>"]
 readme = "README.md"
